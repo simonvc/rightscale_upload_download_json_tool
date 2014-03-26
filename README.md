@@ -26,7 +26,7 @@ $ pip install -r requirements.txt
 Create a credentials file like simonvc.json:
 
 {
-  "email": "simon.vans-colina@pearson.com",
+  "email": "simon.vans-colina@simon.vc",
   "password": "yourpassword",
   "account": "12345"
 }
