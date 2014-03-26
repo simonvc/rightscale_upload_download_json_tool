@@ -18,10 +18,12 @@ git clone this repo.
  
 in the checkout, 
 
+```
 $ virtualenv .
 $ ./bin/activate
 $ pip install -r requirements.txt
 
+```
 
 Create a credentials file like simonvc.json:
 
