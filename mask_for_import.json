@@ -1,0 +1,59 @@
+{
+    "cloud": "include",
+    "inputs": "include",
+    "ip_addresses": {
+        "address": "include",
+        "attached_to": "include",
+        "name": "include",
+        "network": "include"
+    },
+    "name": "include",
+    "recurring_volume_attachments": "include",
+    "server_arrays": {
+        "array_type": "include",
+        "elasticity_params": "include",
+        "name": "include",
+        "next_instance": {
+            "inputs": "include",
+            "self": {
+                "multi_cloud_image": "include", 
+                "instance_type": "include",
+                "security_groups": {
+                    "name": "include"
+                },
+                "ssh_key": "include"
+            },
+            "server_template": {
+                "name": "include",
+                "revision": "include"
+            }
+        }
+    },
+    "servers": {
+        "name": "include",
+        "next_instance": {
+            "inputs": "include",
+            "self": {
+                "multi_cloud_image": "include", 
+                "instance_type": "include",
+                "security_groups": {
+                    "name": "include"
+                },
+                "ssh_key": "include"
+            },
+            "server_template": {
+                "name": "include",
+                "revision": "include"
+            }
+        }
+    },
+    "tags": "include",
+    "volumes": {
+        "attached_to": "include",
+        "iops": "include",
+        "name": "include",
+        "size": "include",
+        "device": "include",
+        "datacenter": "include"
+    }
+}
