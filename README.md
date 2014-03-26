@@ -25,19 +25,26 @@ $ pip install -r requirements.txt
 
 Create a credentials file like simonvc.json:
 
+```
 {
   "email": "simon.vans-colina@simon.vc",
   "password": "yourpassword",
   "account": "12345"
 }
 
+```
 
+```
 usage: deploymentadmin.py [-h] -i USER_CREDENTIALS [-e EXPORT] [-m MASK]
                           [-o OUTPUT] [-l [LIST]] [-c [CLOUDS]] [-u UPLOAD]
                           [-a] [-t] [-v] [--links-debug] [--drop-inputs]
                           [--dry-run] [--tests]
+```
 
 RightScale Deployment Admin tool
+
+
+```
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -66,6 +73,9 @@ optional arguments:
   --dry-run             Just show what would be done without contacting
                         RightScale
   --tests               run test cases
+
+```
+
 
 To list deployments use:
 ./deploymentadmin.py -i simonvc.json -list sandbox # to see a filtered list of all deployments containing sandbox
