@@ -80,11 +80,27 @@ optional arguments:
 
 
 To list deployments use:
+
+```
 ./deploymentadmin.py -i simonvc.json -list sandbox # to see a filtered list of all deployments containing sandbox
+```
+
+```
 ./deploymentadmin.py -i simonvc.json -list # to see an unfiltered list
 
+```
+
 To export a deployment use:
+
+```
 ./deploymentadmin.py -i simonvc.json --export dev_aws_eu_wi_simonvc_sandbox --mask mask_for_import.json
+```
+
+```
 
 To upload a deployment.json use:
+
+```
+
 ./deploymentadmin.py -i simonvc.json -u dev_aws_eu_wi_simonvc_sandbox3.json
+```
