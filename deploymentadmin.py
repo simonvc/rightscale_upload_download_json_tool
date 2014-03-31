@@ -32,7 +32,6 @@ parser.add_argument('-v', '--verbose-debug', action='store_true', default=False,
 parser.add_argument('--links-debug', action='store_true', default=False, help='Leave links intact when exporting') 
 parser.add_argument('--drop-inputs', action='store_true', default=False, help='Leave links intact when exporting') 
 parser.add_argument('--dry-run', action='store_true', default=False, help='Just show what would be done without contacting RightScale')
-parser.add_argument('--tests', action='store_true', default=False, help='run test cases')
 
 def ppjson(j):
   return json.dumps(j, indent=2, sort_keys=True)
@@ -129,16 +128,6 @@ def liftmask(d, m):
       pass
   return to_return
 
-def test_liftmask():
-  print "TESTING liftmask"
-  print "loading mask"
-  mask=json.loads(""" { "n": "include", "i": "include", "h": "include", "nh": "include", "s": { "a": "include" } }""")
-  print "loading testcase"
-  testcase=json.loads(""" { "n": "a", "i": {"1": 2 }, "d": "error", "h": [{"a": "b"}, {"b": "c"} ], "s": { "a": "a", "b": "error" } } """)
-  print "loading expected result"
-  result=json.loads(""" { "n": "a", "i": {"1": 2 }, "h": [ {"a": "b"}, {"b": "c"} ], "s": { "a": "a" } }""")
-  assert liftmask(testcase, mask) == result
-  print "Test passed ok"
 
 
 
@@ -195,31 +184,6 @@ def rationalize_inputs(djson):
   for sa in djson['server_arrays']:
     sa['next_instance']['inputs'] = dict([(i['name'], i['value']) for i in sa['next_instance']['inputs']])
   return djson
-
-def test_rationalize_inputs():
-  print "Testing rationalize function"
-  tdjson=json.loads(""" 
-{ "inputs": [ { "name": "deployment_input", "value": "deploymentvalue" }, { "name": "default_server_value", "value": "default from deployment" } ], "name": "testdeploy",
-    "server_arrays": [
-        { "name": "sa1", "next_instance": { "inputs": [ { "name": "deployment_input", "value": "deploymentvalue" }, { "name": "server_array_input", "value": "majority" } ] } }, 
-        { "name": "sa2", "next_instance": { "inputs": [ { "name": "deployment_input", "value": "deploymentvalue" }, { "name": "server_array_input", "value": "majority" } ] } }, 
-        { "name": "sa3", "next_instance": { "inputs": [ { "name": "deployment_input", "value": "deploymentvalue" }, { "name": "server_array_input", "value": "minority" } ] } }
-    ],
-    "servers": [
-        { "name": "server1", "next_instance": { "inputs": [ { "name": "deployment_input", "value": "deploymentvalue" }, { "name": "server_input", "value": "majority" } ] } }, 
-        { "name": "server2", "next_instance": { "inputs": [ { "name": "deployment_input", "value": "deploymentvalue" }, { "name": "server_input", "value": "majority" } ] } },
-        { "name": "server3", "next_instance": { "inputs": [ { "name": "deployment_input", "value": "deploymentvalue" }, { "name": "server_input", "value": "minority" } ] } } ] }
-        """)
-  
-  expectedjson=json.loads(""" 
-{ "inputs": { "default_server_value": "default from deployment", "deployment_input": "deploymentvalue", "server_array_input": "majority", "server_input": "majority" }, "name": "testdeploy", "server_arrays": [ { "inputs": {}, "name": "sa1", "next_instance": { "inputs": [] } }, { "inputs": {}, "name": "sa2", "next_instance": { "inputs": [] } }, { "inputs": { "server_array_input": "minority" }, "name": "sa3", "next_instance": { "inputs": [ { "name": "server_array_input", "value": "minority" } ] } } ], "servers": [ { "inputs": {}, "name": "server1", "next_instance": { "inputs": [] } }, { "inputs": {}, "name": "server2", "next_instance": { "inputs": [] } }, { "inputs": { "server_input": "minority" }, "name": "server3", "next_instance": { "inputs": [ { "name": "server_input", "value": "minority" } ] } } ]
-}
-    """)
-  if not expectedjson == rationalize_inputs(tdjson):
-    print ppjson(expectedjson)
-    exit(1)
-  assert expectedjson == rationalize_inputs(tdjson)
-  print "test passed"
 
 def load_deployment_from_json(filename):
   try:
@@ -280,6 +244,8 @@ def create_server(server):
   data['server[instance][cloud_href]']              =cloud_href
   data['server[instance][server_template_href]']    =lookup("@(server_templates)%s" % server['next_instance']['server_template']['name'],
       template_revision=server['next_instance']['server_template']['revision'])
+  if server['next_instance']['self'].get('datacenter'):
+    data['server[instance][datacenter_href]'] = lookup("@(datacenters)%s" % server['next_instance']['self'].get('datacenter'))
   if server['next_instance']['self'].get('multi_cloud_image'):
     # if its an array, test for the existance of each mci until you find one that actually exists
     if type([]) == type(server['next_instance']['self'].get('multi_cloud_image')):
@@ -345,6 +311,8 @@ def create_server_array(sa):
   #data["server_array[instance][inputs][][name]" = "" todo: calculate the correct server inputs
   #data["server_array[instance][inputs][][value] = ""
   debug( ppjson(sa['next_instance']))
+  if sa['next_instance']['self'].get('datacenter'):
+    data['server_array[instance][datacenter_href]'] = lookup("@(datacenters)%s" % sa['next_instance']['self'].get('datacenter'))
   data["server_array[instance][server_template_href]"] = lookup("@(server_templates)%s" % sa['next_instance']['server_template']['name'], 
       template_revision = sa['next_instance']['server_template']['revision'])
   data["server_array[state]"] = "disabled"
@@ -437,6 +405,42 @@ def set_deployment_inputs(this_deployment):
         print r.status_code, r.text
         exit(1)
       
+def bind_unbound_ipaddresses(ipaddress):
+  debug( "Attempting to attach exising ip address reservation")
+  debug( ppjson(ipaddress))
+  # if the server exists:
+  if lookup("@(servers)%s" % ipaddress['attached_to']):
+    ip_addresses_with_the_right_name=promote_links( RSGet("/api/clouds/%s/ip_addresses" % cloud_id, _filter={"name": ipaddress['name']}))
+    # if the ipaddress exists
+    if len(ip_addresses_with_the_right_name) == 1:
+      ip_href=ip_addresses_with_the_right_name[0]['self']
+      # if the ip address isnt currently attached to anything
+      if RSGet("/api/clouds/%s/ip_address_bindings" % cloud_id, _filter={"ip_address_href": ip_href}):
+        stderr("The ip address you requested is already bound to an instance, i will not change it.")
+        debug(ppjson(RSGet("/api/clouds/%s/ip_address_bindings" % cloud_id, _filter={"ip_address_href": ip_href})))
+      else:
+        print "An IP address exists and is not bound, i will bind it for you."
+        debug(ppjson(ip_addresses_with_the_right_name[0]))
+        debug( ppjson(ipaddress))
+        data={}
+        next_instance=lookup("@(next_instance)%s" % ipaddress['attached_to'])
+        data['ip_address_binding[instance_href]'] = next_instance
+        data['ip_address_binding[public_ip_address_href]'] = ip_addresses_with_the_right_name[0]['self']
+        r=RS.post(baseurl+
+            "/api/clouds/%s/ip_address_bindings" % cloud_id, 
+            data=data, 
+            headers=headers)
+        if not 200 <= r.status_code <= 210:
+          print ("Something went wrong binding this IP address")
+          print (r.status_code)
+          print (r.text)
+        else:
+          print "IP address bound"
+    else:
+      stderr("There needs to be exactly one ip address with the name specified already existing if you want me to attach it.")
+      debug( ppjson(ip_addresses_with_the_right_name))
+  else:
+    debug("%s does not exist so not attaching an ip address" % ipaddress['attached_to'])
 
 def create_recurring_volume_attachment(volume):
   print "Creating Volume Attachment between %s and %s" % (volume['attached_to'], volume['name'])
@@ -506,8 +510,6 @@ def lookup(lookupstring, fail_if_not_found=False, **kwargs):
       r= promote_links(RSGet("/api/clouds/%s/ssh_keys" % cloud_id, _filter={"resource_uid": v}))[0]
       debug(r)
       return r['self']
-
-
   elif k=="datacenters":
     r=RS.get(baseurl+"/api/clouds/%s/datacenters" % cloud_id, headers=headers, data=data).text.encode('ascii', 'ignore')
     return short_return( objectify.fromstring(r).xpath("//datacenters/datacenter[resource_uid = '%s']/links/link[@rel = 'self']/@href" % v))
@@ -736,6 +738,7 @@ def export(name_or_href, hint="deployments"):
     drop_list['current_instance'].append('inputs')
 
   links_to_follow=['servers', 
+              'datacenter',
               'current_instance',
               'next_instance',
               'ipaddresses',
@@ -760,8 +763,12 @@ def export(name_or_href, hint="deployments"):
     return export(get_self_href_from_links(rj))
   else:
     debug("api call to rightscale %s" % baseurl+name_or_href)
-    r=RS.get(baseurl+name_or_href, headers=json_headers)
+    if name_or_href.count("instances"):
+      r=RS.get(baseurl+name_or_href, data={"view": "full"}, headers=json_headers) # because rightscale fucking doesnt include the fucking DC in the default view
+    else:
+      r=RS.get(baseurl+name_or_href, headers=json_headers)
     debug("status %s looks like %s" % (r.status_code, r.text[:25]))
+    debug("status %s looks like %s" % (r.status_code, ppjson(r.text)))
     if 200 <= r.status_code <= 210:
       j=json.loads(r.text.encode('ascii', 'ignore'))
     else:
@@ -930,11 +937,6 @@ if '__main__' in __name__:
       open(args.output, 'w').write(final_output)
     print final_output
 
-  if args.tests:
-    test_liftmask()
-    test_rationalize_inputs()
-    exit(0)
-
   if args.upload:
     deployment=load_deployment_from_json(args.upload)
     # cloud = 'eu west' cloud_id=2 cloud_href=/api/clouds/2 
@@ -998,6 +1000,4 @@ if '__main__' in __name__:
       create_recurring_volume_attachment(volume)
 
     for ipaddress in (deployment.get('ip_addresses') or []):
-      print "Not creating an Elastic IP address. Please do this manually if needed"
-      print ppjson(ipaddress)
-
+      bind_unbound_ipaddresses(ipaddress)

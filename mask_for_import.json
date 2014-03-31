@@ -17,6 +17,7 @@
             "inputs": "include",
             "self": {
                 "multi_cloud_image": "include", 
+                "datacenter": "include",
                 "instance_type": "include",
                 "security_groups": {
                     "name": "include"
@@ -35,6 +36,7 @@
             "inputs": "include",
             "self": {
                 "multi_cloud_image": "include", 
+                "datacenter": "include",
                 "instance_type": "include",
                 "security_groups": {
                     "name": "include"
