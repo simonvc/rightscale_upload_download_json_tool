@@ -305,7 +305,26 @@ def create_server_array(sa):
   data["server_array[elasticity_params][pacing][resize_calm_time]"] = sa['elasticity_params']['pacing']['resize_calm_time']
   data["server_array[elasticity_params][alert_specific_params][decision_threshold]"] = sa['elasticity_params']['alert_specific_params']['decision_threshold']
   data["server_array[instance]"] = []
+  security_groups=[]
+  for sg in sa['next_instance']['self'].get('security_groups') or []:
+    security_groups.append( lookup("@(security_groups)%s" % sg['name'] ))
+  debug("Server Array Security Groups")
+  debug(security_groups)
+  data["server_array[instance][security_group_hrefs][]"] = security_groups
+  debug('This is the SA object')
+  debug(ppjson(sa))
+  if sa['next_instance'].get('inputs'):
+    debug("Setting any server array inputs.")
+    for inpt in sa['next_instance']['inputs'].keys():
+      data["server_array[instance][inputs][][name]"] = inpt
+      data["server_array[instance][inputs][][value]"] = sa['next_instance']['inputs'][inpt]
+  else:
+    debug("Not setting any server array inputs.")
   data["server_array[instance][cloud_href]"] = sa['cloud_href']
+  if not sa['next_instance']['self']['instance_type']:
+    stderr('WARNING WARNING server array instance type not set, will use the default.')
+  else:
+    data["server_array[instance][instance_type_href]"] = lookup("@(instance_types)%s" % sa['next_instance']['self']['instance_type'])
   #data["server_array[instance][cloud_href]"] = sa['next_instance']['self']['cloud']
   data["server_array[instance][ssh_key_href]"] = lookup("@(ssh_keys)%s" % sa['next_instance']['self']['ssh_key'])
   #data["server_array[instance][inputs][][name]" = "" todo: calculate the correct server inputs
@@ -316,7 +335,7 @@ def create_server_array(sa):
   data["server_array[instance][server_template_href]"] = lookup("@(server_templates)%s" % sa['next_instance']['server_template']['name'], 
       template_revision = sa['next_instance']['server_template']['revision'])
   data["server_array[state]"] = "disabled"
-  debug( data)
+  debug( ppjson(data))
   #
   if args.dry_run:
     print "DRY_RUN: Will create a server array"
@@ -365,7 +384,7 @@ def set_server_inputs(server):
 
 def set_serverarray_inputs(sa):
   print("Set server array inputs")
-  for wi in ['current_instance', 'next_instance']:
+  for wi in ['next_instance']:
     instance_id=lookup("@(%s_id)%s" %(wi, sa['name']))
     cloud_number=cloud_id.split('/')[-1]
     set_input_url=baseurl+'/api/clouds/%s/instances/%s/inputs/multi_update'% ( 
@@ -560,7 +579,12 @@ def lookup(lookupstring, fail_if_not_found=False, **kwargs):
       debug("Next Instance is: %s" % current_instances)
     return short_return(current_instances)
   elif k=='next_instance_id':
-    return lookup("@(next_instance)%s" % v).split('/')[-1] # just grab the ID from the end of the URL
+    to_return=lookup("@(next_instance)%s" % v)
+    if type([]) == type(to_return):
+      return [i.split('/')[-1] for i in to_return]# just grab the ID from the end of the URL
+    else:
+      return to_return.split('/')[-1] # just grab the ID from the end of the URL
+
   elif k=='current_instance_id':
     to_return=lookup("@(current_instance)%s" % v)# just grab the ID from the end of the URL
     if type([]) == type(to_return):
@@ -992,8 +1016,7 @@ if '__main__' in __name__:
       sa['server_array[instance][cloud_href]'] = deployment['cloud']
       create_server_array(sa)
       server_array_href = lookup("@(server_arrays)%s" % sa['name'])
-      if sa.has_key('inputs'):
-        set_server_array_inputs(server)
+      #set_serverarray_inputs(sa) # set at create time instead.
       set_tags(server_array_href, deployment['tags'])
 
     for volume in (deployment.get('volumes') or []):
